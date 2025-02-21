@@ -37,6 +37,9 @@ export default {
       );
     }
 
+    const modelInUse = env.DEFAULT_AI_MODEL;
+    console.log(`Using model: ${modelInUse}`);
+
     /** Process request if authorization succeeds */
     try {
       // Parse the JSON body from the request
@@ -49,7 +52,7 @@ export default {
       }));
 
       // Run the AI model with the messages and store the result
-      const result = await env.AI.run(env.DEFAULT_AI_MODEL, {
+      const result = await env.AI.run(modelInUse, {
         messages: messages,
       });
 
