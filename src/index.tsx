@@ -37,8 +37,12 @@ export default {
       );
     }
 
-    const modelInUse = env.DEFAULT_AI_MODEL;
-    console.log(`Using model: ${modelInUse}`);
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    const parsedModel = pathParts[pathParts.length - 1].startsWith('@') ? pathParts.at(-1) : null;
+
+    const modelInUse = parsedModel ?? env.DEFAULT_AI_MODEL;
+    console.log(`Model in use: ${modelInUse}`);
 
     /** Process request if authorization succeeds */
     try {
