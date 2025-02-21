@@ -6,6 +6,7 @@ export interface Env {
   };
   API_KEY: string;
   DEFAULT_AI_MODEL: string;
+  CACHE: KVNamespace;
 }
 
 // Default export of an object containing the fetch method

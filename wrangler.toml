@@ -1,5 +1,5 @@
-name = "ai-llama-forwarder"
-compatibility_date = "2023-09-20"
+name = "ai-forwarder"
+compatibility_date = "2025-02-21"
 main = "src/index.tsx"
 
 [ai]
@@ -8,6 +8,12 @@ binding = "AI"
 [vars]
 DEFAULT_AI_MODEL = "@cf/meta/llama-3-8b-instruct"
 
+[[kv_namespaces]]
+binding = "CACHE"
+id = "8cc00797d6a6444f8a65d7ead29bf715"
+preview_id = "0ac8524517094753a46477bf1561f63d"
+
 # wrangler.toml (wrangler v3.88.0^)
 [observability.logs]
 enabled = true
+

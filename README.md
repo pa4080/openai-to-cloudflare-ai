@@ -6,9 +6,18 @@ This is example of using [Workers AI](https://developers.cloudflare.com/workers-
 
 You need to have a Cloudflare account and the [Wrangler](https://developers.cloudflare.com/workers/cli-wrangler/) installed.
 
+### Step 0. Configuration
+
+Edit `wrangler.toml` and change the worker name if you want to use a different name. Then generate the KV namespace and agan update the `wrangler.toml` file.
+
+```bash
+ wrangler kv:namespace create kv
+ wrangler kv:namespace create kv --preview
+ ```
+
 ### Step 1. Deploy
 
-```txt
+```bash
 cp .env.example .env
 pnpm i
 pnpm run deploy
