@@ -28,8 +28,8 @@ scripts/test-api.sh
 
 ## Author
 
-Jack Culpan <https://github.com/jackculpan>.
-Spas Spasov <>
+- Jack Culpan <https://github.com/jackculpan>
+- Spas Spasov <https://github.com/pa4080>
 
 ## License
 

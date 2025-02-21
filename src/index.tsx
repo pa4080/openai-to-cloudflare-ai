@@ -2,7 +2,7 @@
 // Define the structure for the environment variables, specifically the AI model interface
 export interface Env {
   AI: {
-    run: (model: string, options: { messages: Array<{ role: string; content: string; }>; }) => Promise<{ response: string, error?: string; }>;
+    run: (model: string, options: { messages: Array<{ role: string; content: string; }>; temperature?: number; }) => Promise<{ response: string, error?: string; }>;
   };
   API_KEY: string;
   DEFAULT_AI_MODEL: string;
@@ -14,79 +14,73 @@ export default {
   async fetch(request: Request, env: Env) {
     /** Authorization check */
     const authHeader = request.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Authorization header required' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const authParts = authHeader.split(' ');
-    if (authParts.length !== 2 || authParts[0] !== 'Bearer') {
-      return new Response(
-        JSON.stringify({ error: 'Invalid authorization format. Use Bearer <token>' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const apiKey = authParts[1];
-    if (apiKey !== env.API_KEY) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid API key' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
-      );
+    if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.split(' ')[1] !== env.API_KEY) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
     }
 
     /** Parse the model from the URL */
+    const modelInUse = env.DEFAULT_AI_MODEL;
+
+    // Handle OpenAI-style API endpoints
     const url = new URL(request.url);
-    const pathname = url.pathname.replace(/^\//, '');
-    const parsedModel = pathname.startsWith('@') ? pathname : null;
-    const modelInUse = parsedModel ?? env.DEFAULT_AI_MODEL;
-    console.log(`Model in use: ${modelInUse}`);
 
-    /** Process request if authorization succeeds */
-    try {
-      // Parse the JSON body from the request
-      const requestData = await request.json() as { messages: Array<{ role: string; content: string; }>; };
+    // Mock models endpoint for credential validation
+    if (url.pathname === '/v1/models') {
+      return new Response(JSON.stringify({
+        object: "list",
+        data: [{
+          id: "llama-3-8b-instruct",
+          object: "model",
+          created: Date.now(),
+          owned_by: "cloudflare"
+        }]
+      }), { headers: { 'Content-Type': 'application/json' } });
+    }
 
-      // Map over the messages to extract necessary fields
-      const messages = requestData.messages.map((message) => ({
-        role: message.role,
-        content: message.content
-      }));
+    // Handle chat completions
+    if (url.pathname === '/v1/chat/completions') {
+      /** Process request if authorization succeeds */
+      try {
+        // Parse the JSON body from the request
+        const requestData = await request.json() as { messages: Array<{ role: string; content: string; }>; temperature?: number; };
+        const { messages: msgs, temperature } = requestData;
 
-      // Run the AI model with the messages and store the result
-      const result = await env.AI.run(modelInUse, {
-        messages: messages,
-      });
+        // Map over the messages to extract necessary fields
+        const messages = msgs.map(({ role, content }) => ({ role, content }));
 
-      // Check for errors in the result
-      if (result.error) {
-        return new Response(JSON.stringify({ error: result.error }), {
+        // Run the AI model with the messages and store the result
+        const result = await env.AI.run(modelInUse, {
+          messages: messages,
+          temperature: requestData.temperature
+        });
+
+        // Check for errors in the result
+        if (result.error) {
+          throw new Error(result.error);
+        }
+
+        const created = Math.floor(Date.now() / 1000);
+
+        return new Response(JSON.stringify({
+          choices: [{
+            message: {
+              content: result.response,
+              role: "assistant"
+            },
+            finish_reason: "stop"
+          }],
+          model: "llama-3-8b-instruct",
+          object: "chat.completion",
+          created,
+          id: `chatcmpl-${created}`
+        }), { headers: { 'Content-Type': 'application/json' } });
+      } catch (error) {
+        // Handle unexpected errors
+        return new Response(JSON.stringify({ error: 'An unexpected error occurred', details: (error as Error).message }), {
           status: 500,
           headers: { 'Content-Type': 'application/json' },
         });
       }
-
-      // Construct the choices object with the AI's response
-      const choices = [
-        {
-          message: {
-            content: result.response,
-          }
-        },
-      ];
-
-      // Return a new HTTP response with the choices object as a JSON string
-      return new Response(JSON.stringify({ choices }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
-    } catch (error) {
-      // Handle unexpected errors
-      return new Response(JSON.stringify({ error: 'An unexpected error occurred' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
     }
   }
 };
