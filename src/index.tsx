@@ -82,5 +82,91 @@ export default {
         });
       }
     }
+
+
+
+    if (url.pathname === '/v1/assistants' || url.pathname.startsWith('/v1/assistants/')) {
+      try {
+        // Mock assistant data
+        const assistantId = 'asst_cloudflareWorker123';
+        const createdAt = Math.floor(Date.now() / 1000);
+
+        // Handle different methods
+        if (request.method === 'POST') {
+          // Create assistant request
+          const requestData = await request.json() as {
+            name?: string;
+            description?: string;
+            model?: string;
+          };
+
+          return new Response(JSON.stringify({
+            id: assistantId,
+            object: "assistant",
+            created_at: createdAt,
+            name: requestData.name || "Cloudflare Assistant",
+            description: requestData.description || "Cloudflare AI Assistant",
+            model: requestData.model || env.DEFAULT_AI_MODEL,
+            tools: [],
+            file_ids: [],
+            metadata: {}
+          }), {
+            status: 201,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+        else if (request.method === 'GET') {
+          // List or retrieve assistant
+          if (url.pathname === '/v1/assistants') {
+            // List assistants
+            return new Response(JSON.stringify({
+              object: "list",
+              data: [{
+                id: assistantId,
+                object: "assistant",
+                created_at: createdAt,
+                name: "Cloudflare Assistant",
+                description: "Cloudflare AI Assistant",
+                model: env.DEFAULT_AI_MODEL,
+                tools: [],
+                file_ids: [],
+                metadata: {}
+              }]
+            }), { headers: { 'Content-Type': 'application/json' } });
+          } else {
+            // Get specific assistant
+            return new Response(JSON.stringify({
+              id: assistantId,
+              object: "assistant",
+              created_at: createdAt,
+              name: "Cloudflare Assistant",
+              description: "Cloudflare AI Assistant",
+              model: env.DEFAULT_AI_MODEL,
+              tools: [],
+              file_ids: [],
+              metadata: {}
+            }), { headers: { 'Content-Type': 'application/json' } });
+          }
+        }
+
+        // Handle unsupported methods
+        return new Response(JSON.stringify({
+          error: {
+            message: `Method ${request.method} not supported for assistants endpoint`,
+            type: "invalid_request_error"
+          }
+        }), { status: 405 });
+
+      } catch (error) {
+        return new Response(JSON.stringify({
+          error: {
+            message: 'Assistant operation failed',
+            type: "api_error"
+          }
+        }), { status: 500 });
+      }
+    }
+
+    // Add to the end of your existing code...
   }
 };
