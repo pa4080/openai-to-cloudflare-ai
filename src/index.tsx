@@ -37,10 +37,10 @@ export default {
       );
     }
 
+    /** Parse the model from the URL */
     const url = new URL(request.url);
-    const pathParts = url.pathname.split('/');
-    const parsedModel = pathParts[pathParts.length - 1].startsWith('@') ? pathParts.at(-1) : null;
-
+    const pathname = url.pathname.replace(/^\//, '');
+    const parsedModel = pathname.startsWith('@') ? pathname : null;
     const modelInUse = parsedModel ?? env.DEFAULT_AI_MODEL;
     console.log(`Model in use: ${modelInUse}`);
 
