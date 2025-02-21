@@ -2,47 +2,35 @@
 
 This is example of using [Workers AI](https://developers.cloudflare.com/workers-ai/). This Cloudflare Worker provides a Base URL which allows you to make AI calls to the @cf/meta/llama-3-8b-instruct model using an OpenAI client.
 
-## Usage
+## Deployment and test
+
+You need to have a Cloudflare account and the [Wrangler](https://developers.cloudflare.com/workers/cli-wrangler/) installed.
+
+### Step 1. Deploy
 
 ```txt
-npm install 
-npm run dev
-npm run deploy
+cp .env.example .env
+pnpm i
+pnpm run deploy
+pnpm run api-key
 ```
 
-[Example (Ruby using the ruby-openai gem)](https://github.com/alexrudall/ruby-openai)
+At this point you should have a setup Cloudflare Worker that you can use to make AI calls to the @cf/meta/llama-3-8b-instruct and other CF models using an OpenAI client.
 
-```ruby
-require 'openai'
+### Step 2. Test
 
-client = OpenAI::Client.new(
-  api_key: ENV['OPENAI_API_KEY'],
-  uri_base: ENV['CLOUDFLARE_WORKER_URL']
-)
+Tweak the [`.env`](.env.example) file created in Step 1. There should be a `CLOUDFLARE_WORKER_URL` and `API_KEY` variable.
+You can obtain the worker URL from the Cloudflare Workers dashboard. You can obtain the API key from the Cloudflare Workers dashboard.
 
-response = client.chat(
-  parameters: {
-    model: 'gpt-4-turbo', #This is ignored in this example
-    messages: [
-      {
-        role: 'system', content: 'You are a helpful assistant'
-      },
-      {
-        role: 'user', content: 'What is 3 * 10?'
-      }
-    ]
-  }
-)
-
-puts response.dig('choices', 0, 'message', 'content')
+```bash
+scripts/test-api.sh
 ```
-
 
 ## Author
 
 Jack Culpan <https://github.com/jackculpan>.
+Spas Spasov <>
 
 ## License
 
 MIT
-# openai-to-cloudflare-ai

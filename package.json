@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "api-key": "bash -c 'API_KEY=$(openssl rand -base64 32) && echo \"API_KEY=${API_KEY}\" | tee -a .env && wrangler secret put API_KEY <<< \"$API_KEY\"'",
     "dev": "wrangler dev --remote src/index.tsx",
     "deploy": "wrangler deploy --minify src/index.tsx"
   },

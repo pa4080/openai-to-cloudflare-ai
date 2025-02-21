@@ -2,17 +2,45 @@
 // Define the structure for the environment variables, specifically the AI model interface
 export interface Env {
   AI: {
-    run: (model: string, options: { messages: Array<{ role: string; content: string }> }) => Promise<{ response: string, error?: string }>;
+    run: (model: string, options: { messages: Array<{ role: string; content: string; }>; }) => Promise<{ response: string, error?: string; }>;
   };
+  API_KEY: string;
+  DEFAULT_AI_MODEL: string;
 }
 
 // Default export of an object containing the fetch method
 export default {
   // Asynchronous fetch method to handle requests
   async fetch(request: Request, env: Env) {
+    /** Authorization check */
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Authorization header required' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const authParts = authHeader.split(' ');
+    if (authParts.length !== 2 || authParts[0] !== 'Bearer') {
+      return new Response(
+        JSON.stringify({ error: 'Invalid authorization format. Use Bearer <token>' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const apiKey = authParts[1];
+    if (apiKey !== env.API_KEY) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid API key' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    /** Process request if authorization succeeds */
     try {
       // Parse the JSON body from the request
-      const requestData = await request.json() as { messages: Array<{ role: string; content: string }> };
+      const requestData = await request.json() as { messages: Array<{ role: string; content: string; }>; };
 
       // Map over the messages to extract necessary fields
       const messages = requestData.messages.map((message) => ({
@@ -21,7 +49,7 @@ export default {
       }));
 
       // Run the AI model with the messages and store the result
-      const result = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+      const result = await env.AI.run(env.DEFAULT_AI_MODEL, {
         messages: messages,
       });
 
@@ -54,4 +82,4 @@ export default {
       });
     }
   }
-}
+};
