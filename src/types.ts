@@ -1,32 +1,34 @@
 
 interface Env {
-	AI: {
-		run: (model: Model, options: Options) => Promise<AiResponse>;
-	};
-	API_KEY: string;
-	DEFAULT_AI_MODEL: string;
-	CACHE: KVNamespace;
+  AI: {
+    run: (model: Model, options: Options) => Promise<AiResponse>;
+  };
+  API_KEY: string;
+  DEFAULT_AI_MODEL: string;
+  CACHE: KVNamespace;
+  CF_API_KEY: string | undefined;
+  CF_ACCOUNT_ID: string | undefined;
 }
 
 /**
  * AI Request
  */
 interface BaseInputOptions {
-	stream?: boolean;
-	max_tokens?: number;
-	temperature?: number;
-	top_p?: number;
-	top_k?: number;
-	seed?: number;
-	repetition_penalty?: number;
-	frequency_penalty?: number;
-	presence_penalty?: number;
+  stream?: boolean;
+  max_tokens?: number;
+  temperature?: number;
+  top_p?: number;
+  top_k?: number;
+  seed?: number;
+  repetition_penalty?: number;
+  frequency_penalty?: number;
+  presence_penalty?: number;
 }
 
 interface PromptInputOptions extends BaseInputOptions {
-	prompt: string;
-	raw?: boolean;
-	lora?: string;
+  prompt: string;
+  raw?: boolean;
+  lora?: string;
 }
 
 /**
@@ -34,72 +36,69 @@ interface PromptInputOptions extends BaseInputOptions {
  * OpenAi: 'system' become 'developer'...
  * Cloudflare: The role of the message sender (e.g., 'user', 'assistant', 'system', 'tool').
  */
+type ChatMessageRole = 'user' | 'assistant' | 'developer' | 'system' | 'tool';
 interface ChatMessage {
-	role: 'user' | 'assistant' | 'developer' | 'system';
-	content: string;
+  role: ChatMessageRole;
+  content: string;
 }
 
-interface ParameterDefinition {
-	type: string;
-	description: string;
+interface ToolParameterProps {
+  type: string;
+  description: string;
 }
 
-interface ToolParameterSchema {
-	type: string;
-	required?: string[];
-	properties: Record<string, ParameterDefinition>;
+interface ToolParameter {
+  type: string;
+  required?: string[];
+  properties: Record<string, ToolParameterProps>;
 }
 
 interface Tool {
-	name: string;
-	description: string;
-	parameters: ToolParameterSchema;
+  name: string;
+  description: string;
+  parameters: ToolParameter;
 }
 
 interface FunctionTool {
-	type: string;
-	function: {
-		name: string;
-		description: string;
-		parameters: ToolParameterSchema;
-	};
+  type: "function";
+  function: Tool;
 }
 
 interface MessagesInputOptions extends BaseInputOptions {
-	messages: ChatMessage[];
-	functions?: Array<{
-		name: string;
-		code: string;
-	}>;
-	tools?: Array<Tool | FunctionTool>;
+  messages: ChatMessage[];
+  functions?: Array<{
+    name: string;
+    code: string;
+  }>;
+  tools?: Array<Tool | FunctionTool>;
 }
 
 type Options = PromptInputOptions | MessagesInputOptions;
 
 
 interface CloudflareAiRequestParts {
-	model: Model, options: Options;
+  model: Model, options: Options;
 }
 
 /**
  * AI Response
  */
 interface UsageStats {
-	prompt_tokens: number;
-	completion_tokens: number;
-	total_tokens: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
 }
 
 interface ToolCall {
-	arguments: Record<string, any>;
-	name: string;
+  arguments: Record<string, any>;
+  name: string;
 }
 
 interface AiJsonResponse {
-	contentType: "application/json";
-	response: string;
-	usage: UsageStats;
-	tool_calls?: ToolCall[];
+  contentType: "application/json";
+  response: string;
+  usage: UsageStats;
+  tool_calls?: ToolCall[];
 }
 
 type AiStreamResponse = ReadableStream<Uint8Array>;
@@ -107,104 +106,230 @@ type AiStreamResponse = ReadableStream<Uint8Array>;
 type AiResponse = AiJsonResponse | AiStreamResponse;
 
 /**
- * Assistant
- */
-interface Assistant {
-	id: string;
-	object: "assistant";
-	created_at: number;
-	name: string | null;
-	description: string | null;
-	model: Model;
-	instructions: string | null;
-	tools: Array<{
-		type: "code_interpreter" | "file_search" | "function";
-		[key: string]: any;
-	}>;
-	metadata: Record<string, any>;
-	temperature: number | null;
-	top_p: number | null;
-	response_format: "auto" | { type: string; };
-}
-
-interface AssistantCreateParams {
-	name: string;
-	description?: string;
-	model?: string;
-	tools?: any[];
-	metadata?: Record<string, any>;
-}
-
-/**
  * Models
  */
 type ModelType = {
-	id: string,
-	object: "model",
-	created: string,
-	owned_by: string,
-	description: string,
+  id: string,
+  object: "model",
+  description: string,
 };
 type Model = ModelType['id'];
 
 /**
+ * OpenAI Common
+ */
+type ResponseFormat =
+  | "auto"
+  | { type: "text"; }
+  | { type: "json_object"; }
+  | { type: "json_schema"; json_schema: Record<string, any>; };
+
+type ToolChoice =
+  | 'none'
+  | 'auto'
+  | 'required'
+  | { type: 'function'; function: { name: string; }; };
+
+/**
  * ChatCompletions Request
  */
-interface OpenAiChatCmplReq {
-	messages: ChatMessage[];
-	model: Model;
-	store?: boolean | null;
-	reasoning_effort?: 'low' | 'medium' | 'high' | null;
-	metadata?: Record<string, string>; // Key<=64 chars, Value<=512 chars
-	frequency_penalty?: number | null; // Between -2.0 and 2.0
-	logit_bias?: Record<number, number>; // Token ID to bias (-100 to 100)
-	logprobs?: boolean | null;
-	top_logprobs?: number | null; // 0-20 when logprobs=true
-	/** @deprecated Use max_completion_tokens instead */
-	max_tokens?: number | null;
-	max_completion_tokens?: number | null;
-	n?: number | null; // Default 1
-	modalities?: ('text' | 'audio')[] | null;
-	prediction?: Record<string, any>; // Prediction configuration
-	audio?: Record<string, any> | null; // Audio output parameters
-	presence_penalty?: number | null; // Between -2.0 and 2.0
-	response_format?:
-	| { type: 'text'; }
-	| { type: 'json_object'; }
-	| { type: 'json_schema'; json_schema: Record<string, any>; };
-	seed?: number | null;
-	service_tier?: 'auto' | 'default' | string | null;
-	stop?: string | string[] | null; // Up to 4 sequences
-	stream?: boolean | null;
-	stream_options?: {
-		include_usage?: boolean;
-	} | null;
-	temperature?: number | null; // 0-2, default 1
-	top_p?: number | null; // 0-1, default 1
-	tools?: Array<{
-		type: 'function';
-		function: {
-			name: string;
-			description?: string;
-			parameters: Record<string, any>;
-		};
-	}>; // Max 128 tools
-	tool_choice?:
-	| 'none'
-	| 'auto'
-	| 'required'
-	| { type: 'function'; function: { name: string; }; };
-	parallel_tool_calls?: boolean; // Default true
-	user?: string; // End-user identifier
-	/** @deprecated Use tool_choice instead */
-	function_call?:
-	| 'none'
-	| 'auto'
-	| { name: string; };
-	/** @deprecated Use tools instead */
-	functions?: Array<{
-		name: string;
-		description?: string;
-		parameters: Record<string, any>;
-	}>;
+interface OpenAiChatCompletionReq {
+  messages: ChatMessage[];
+  model: Model;
+  store?: boolean | null;
+  reasoning_effort?: 'low' | 'medium' | 'high' | null;
+  metadata?: Record<string, string>; // Key<=64 chars, Value<=512 chars
+  frequency_penalty?: number | null; // Between -2.0 and 2.0
+  logit_bias?: Record<number, number>; // Token ID to bias (-100 to 100)
+  logprobs?: boolean | null;
+  top_logprobs?: number | null; // 0-20 when logprobs=true
+  /** @deprecated Use max_completion_tokens instead */
+  max_tokens?: number | null;
+  max_completion_tokens?: number | null;
+  n?: number | null; // Default 1
+  modalities?: ('text' | 'audio')[] | null;
+  prediction?: Record<string, any>; // Prediction configuration
+  audio?: Record<string, any> | null; // Audio output parameters
+  presence_penalty?: number | null; // Between -2.0 and 2.0
+  response_format?: ResponseFormat;
+  seed?: number | null;
+  service_tier?: 'auto' | 'default' | string | null;
+  stop?: string | string[] | null; // Up to 4 sequences
+  stream?: boolean | null;
+  stream_options?: {
+    include_usage?: boolean;
+  } | null;
+  temperature?: number | null; // 0-2, default 1
+  top_p?: number | null; // 0-1, default 1
+  tools?: Array<{
+    type: 'function';
+    function: {
+      name: string;
+      description?: string;
+      parameters: Record<string, any>;
+    };
+  }>; // Max 128 tools
+  tool_choice?: ToolChoice;
+  parallel_tool_calls?: boolean; // Default true
+  user?: string; // End-user identifier
+  /** @deprecated Use tool_choice instead */
+  function_call?:
+  | 'none'
+  | 'auto'
+  | { name: string; };
+  /** @deprecated Use tools instead */
+  functions?: Array<{
+    name: string;
+    description?: string;
+    parameters: Record<string, any>;
+  }>;
+}
+
+
+/**
+ * Assistant
+ */
+interface ToolResources {
+  code_interpreter?: {
+    file_ids: string[];
+  };
+  file_search?: {
+    vector_store_ids: string[];
+  };
+}
+
+
+
+interface CodeInterpreterTool {
+  type: "code_interpreter";
+}
+
+interface FileSearchTool {
+  type: "file_search";
+}
+
+type AssistantTool = FunctionTool | CodeInterpreterTool | FileSearchTool;
+
+// Request Interface for creating/updating an Assistant
+interface CreateAssistantRequest {
+  model: Model;
+  name?: string | null;
+  description?: string | null;
+  instructions?: string | null;
+  reasoning_effort?: "low" | "medium" | "high" | null;
+  tools?: AssistantTool[];
+  tool_resources?: ToolResources | null;
+  metadata?: Record<string, string>; // Keys <=64 chars, Values <=512 chars
+  temperature?: number | null; // Between 0 and 2
+  top_p?: number | null; // Between 0 and 1
+  response_format?: ResponseFormat;
+}
+
+// Response Interface for Assistant operations
+interface AssistantResponse {
+  id: string;
+  object: "assistant";
+  created_at: number;
+  name: string | null;
+  description: string | null;
+  model: Model;
+  instructions: string | null;
+  reasoning_effort?: "low" | "medium" | "high" | null;
+  tools: AssistantTool[];
+  tool_resources: ToolResources | null;
+  metadata: Record<string, string>;
+  temperature: number | null;
+  top_p: number | null;
+  response_format: ResponseFormat;
+}
+
+// Full Assistant interface (can be used for type casting)
+interface Assistant extends AssistantResponse {
+  // Inherits all properties from AssistantResponse
+}
+
+interface Thread {
+  id: string;
+  object: "thread";
+  created_at: number;
+  metadata: Record<string, any>;
+  tool_resources: Record<string, any>;
+}
+
+interface ThreadRunRequest {
+  assistant_id: string;
+  status: string;
+  model: Model;
+  stream: boolean;
+  instructions: string | null;
+  tools: Array<{
+    type: "code_interpreter" | "file_search" | "function";
+    [key: string]: any;
+  }>;
+  tool_resources: ToolResources | null;
+  tool_choice?: ToolChoice;
+  metadata: Record<string, any>;
+  top_p: number | null;
+  temperature: number | null;
+  parallel_tool_calls: boolean;
+  max_prompt_tokens: number | null;
+  max_completion_tokens: number | null;
+  truncation_strategy: {
+    type: "auto" | "first" | "last";
+    last_messages: number;
+  };
+
+}
+
+interface ThreadRunResponse extends ThreadRunRequest {
+  id: string;
+  object: "thread.run";
+  created_at: number;
+  thread_id: string;
+  status: string;
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  } | null;
+}
+
+interface ThreadRun extends ThreadRunResponse {
+  // Inherits all properties from ThreadRunResponse
+}
+
+/**
+ * Cloudflare API Fetch
+ */
+type CfModelTaskName =
+  | "Text Generation"
+  | "Text Classification"
+  | "Object Detection"
+  | "Automatic Speech Recognition"
+  | "Image-to-Text"
+  | "Image Classification"
+  | "Translation"
+  | "Text Embeddings"
+  | "Summarization";
+
+
+interface CfModelTask {
+  id: string;
+  name: CfModelTaskName;
+  description: string;
+}
+
+interface CfModel {
+  id: string;
+  name: string;
+  source: string;
+  description: string;
+  task: CfModelTask;
+}
+interface FetchModelsResponse {
+  success: boolean;
+  result: CfModel[];
+  errors?: any[];
+  messages?: any[];
+  result_info?: any;
 }

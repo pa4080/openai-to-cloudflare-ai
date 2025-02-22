@@ -26,7 +26,18 @@ pnpm run api-key
 
 At this point you should have a setup Cloudflare Worker that you can use to make AI calls to the @cf/meta/llama-3-8b-instruct and other CF models using an OpenAI client.
 
-### Step 2. Test
+### Step 2. Additional Credentials
+
+In order to automatically fetch the list of the available AI models you need to add the `CF_API_KEY` and `CF_ACCOUNT_ID` to the cloudflare workers secret.
+
+```bash
+wrangler secret put CF_API_KEY <<<(Your Cloudflare API Key/Token)
+wrangler secret put CF_ACCOUNT_ID <<<(Your Cloudflare Account ID)
+```
+
+Otherwise a limited predefined list of [models](./src/models.ts) will be available.
+
+### Step 3. Test
 
 Tweak the [`.env`](.env.example) file created in Step 1. There should be a `CLOUDFLARE_WORKER_URL` and `API_KEY` variable.
 You can obtain the worker URL from the Cloudflare Workers dashboard. You can obtain the API key from the Cloudflare Workers dashboard.
