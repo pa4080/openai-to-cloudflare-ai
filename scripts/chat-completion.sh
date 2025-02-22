@@ -1,5 +1,4 @@
 #!/bin/bash
-
 . .env
 
 : ${API_KEY:="your_cloudflare_worker_api_key"}

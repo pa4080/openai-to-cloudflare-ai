@@ -49,35 +49,28 @@ Tweak the [`.env`](.env.example) file created in Step 1.  There should be a `CLO
 
 To test all possible paths and methods currently implemented in our Cloudflare Worker, there are prepared fel scripts in the [scripts](./scripts) folder. In each scripts have instructions and list of envvars that could be either exported in the shell or placed int the [`.env`](.env) file.
 
-| Tested and working endpoints |
-| ---------------------------- |
+ | Endpoint                  | Method | Description                                 | Script Call from the Project Root                                                   |
+ | ------------------------- | ------ | ------------------------------------------- | ----------------------------------------------------------------------------------- |
+ | /models/search            | GET    | Lists all models (no auth)                  | Open in a browser HTML output                                                       |
+ | /models/search?query=json | GET    | Lists all models (no auth)                  | Open in a browser JSON output                                                       |
+ | /v1/models                | GET    | Lists all models                            | [`scripts/models.sh`](./scripts/models.sh)                                          |
+ | /v1/chat/completions      | POST   | Creates a chat completion                   | [`scripts/chat-completion.sh`](./scripts/chat-completion.sh)                        |
+ | /v1/chat/completions      | POST   | Creates a chat completion stream            | [`scripts/chat-completion-stream.sh`](./scripts/chat-completion-stream.sh)          |
+ | /v1/embeddings            | POST   | Creates an embedding (3+2 tests)            | [`scripts/embeddings.sh`](./scripts/embeddings.sh)                                  |
+ |                           |        |                                             |                                                                                     |
+ | /v1/assistants            | POST   | Creates an assistant. Check the KV storage. | [`scripts/assistants-create.sh`](./scripts/assistants-create.sh)                    |
+ | /v1/assistants            | GET    | Lists all assistants                        | [`scripts/assistants-list.sh`](./scripts/assistants-list.sh)                        |
+ | /v1/assistants/:id        | GET    | Retrieves an assistant                      | [`ASST_ID=asst_abc scripts/assistant-retrieve.sh`](./scripts/assistant-retrieve.sh) |
+ | /v1/assistants/:id        | POST   | Modifies an assistant                       | [`ASST_ID=asst_abc scripts/assistant-modify.sh`](./scripts/assistant-modify.sh)     |
+ | /v1/assistants/:id        | DELETE | Deletes an assistant                        | [`ASST_ID=asst_abc scripts/assistant-delete.sh`](./scripts/assistant-delete.sh)     |
+ | /v1/threads               | POST   | Creates a thread                            |                                                                                     |
+ | /v1/threads/:id           | GET    | Retrieves a thread                          |                                                                                     |
+ | /v1/threads/:id           | POST   | Modifies a thread                           |                                                                                     |
+ | /v1/threads/:id           | DELETE | Deletes a thread                            |                                                                                     |
+ | /v1/threads/:id/runs      | POST   | Creates a run for a thread                  |                                                                                     |
+ | /v1/threads/:id/runs      | POST   | Creates a run for a thread  streaming       |                                                                                     |
 
-| Endpoint                  | Method | Description                      | Script Call from the Project Root |
-| ------------------------- | ------ | -------------------------------- | --------------------------------- |
-| /models/search            | GET    | Lists all models (no auth)       | Open in a browser HTML output     |
-| /models/search?query=json | GET    | Lists all models (no auth)       | Open in a browser JSON output     |
-| /v1/models                | GET    | Lists all models                 | scripts/models.sh                 |
-| /v1/models                | POST   | Lists all models                 | scripts/models.sh                 |
-| /v1/chat/completions      | POST   | Creates a chat completion        | scripts/chat-completion.sh        |
-| /v1/chat/completions      | POST   | Creates a chat completion stream | scripts/chat-completion-stream.sh |
-| /v1/embeddings            | POST   | Creates an embedding (3+2 tests) | scripts/embeddings.sh             |
 
-| Endpoints under development |
-| --------------------------- |
-
-| Endpoint             | Method | Description                           | Script Call from the Project Root |
-| -------------------- | ------ | ------------------------------------- | --------------------------------- |
-| /v1/assistants       | POST   | Creates an assistant                  |                                   |
-| /v1/assistants       | GET    | Lists all assistants                  |                                   |
-| /v1/assistants/:id   | GET    | Retrieves an assistant                |                                   |
-| /v1/assistants/:id   | POST   | Modifies an assistant                 |                                   |
-| /v1/assistants/:id   | DELETE | Deletes an assistant                  |                                   |
-| /v1/threads          | POST   | Creates a thread                      |                                   |
-| /v1/threads/:id      | GET    | Retrieves a thread                    |                                   |
-| /v1/threads/:id      | POST   | Modifies a thread                     |                                   |
-| /v1/threads/:id      | DELETE | Deletes a thread                      |                                   |
-| /v1/threads/:id/runs | POST   | Creates a run for a thread            |                                   |
-| /v1/threads/:id/runs | POST   | Creates a run for a thread  streaming |                                   |
 
 ## Author
 

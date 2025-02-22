@@ -19,11 +19,11 @@ export default {
     }
 
     switch (true) {
-      case url.pathname === '/v1/models':
+      case url.pathname === '/v1/models' && request.method === 'GET':
         return this.handleListModels(env);
-      case url.pathname === '/v1/chat/completions':
+      case url.pathname === '/v1/chat/completions' && request.method === 'POST':
         return this.handleChatCompletions(request, env);
-      case url.pathname === '/v1/embeddings':
+      case url.pathname === '/v1/embeddings' && request.method === 'POST':
         return this.handleEmbeddings(request, env);
       case url.pathname.startsWith('/v1/assistants'):
         return this.handleAssistants(request, env, url);
