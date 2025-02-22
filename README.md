@@ -40,6 +40,12 @@ scripts/test-api.sh
 - Jack Culpan <https://github.com/jackculpan>
 - Spas Spasov <https://github.com/pa4080>
 
+## References
+
+- <https://platform.openai.com/docs/api-reference>
+- <https://developers.cloudflare.com/workers-ai/models>
+- <https://chat.deepseek.com/a/chat/s/71155bf0-ee66-46a4-9599-ab074c39e447>
+
 ## License
 
 MIT
