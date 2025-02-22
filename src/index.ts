@@ -625,7 +625,7 @@ export default {
       temperature: this.mapTemperatureToCloudflare(
         run.temperature ?? assistant.temperature ?? undefined
       ),
-      top_p: run.top_p ?? assistant.top_p ?? 1.0,
+      top_p: run.top_p ?? assistant.top_p,
       seed: run.truncation_strategy?.last_messages ?? undefined,
       frequency_penalty: undefined, // Not directly mapped
       presence_penalty: undefined,   // Not directly mapped
@@ -723,7 +723,7 @@ export default {
     const openaiTemp = temp ?? 1;
     const clamped = Math.min(Math.max(openaiTemp, 0), 2);
     // Linear mapping: 0→0, 1→2.5, 2→5
-    return !!temp ? Number((clamped * 2.5).toFixed(1)) : 0.6;
+    return !!temp ? Number(temp) === 1 ? 0.6 : Number((clamped * 2.5).toFixed(1)) : 0.6;
   },
 
   getRandomId() {

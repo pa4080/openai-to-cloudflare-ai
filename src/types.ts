@@ -16,9 +16,9 @@ interface Env {
 interface BaseInputOptions {
   stream?: boolean;
   max_tokens?: number;
-  temperature?: number;
-  top_p?: number;
-  top_k?: number;
+  temperature?: number | null | undefined;
+  top_p?: number | null | undefined;
+  top_k?: number | null | undefined;
   seed?: number;
   repetition_penalty?: number;
   frequency_penalty?: number;
