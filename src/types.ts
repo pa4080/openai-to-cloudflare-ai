@@ -238,8 +238,8 @@ interface AssistantResponse {
   tools: AssistantTool[];
   tool_resources: ToolResources | null;
   metadata: Record<string, string>;
-  temperature: number | null;
-  top_p: number | null;
+  temperature: number | null | undefined;
+  top_p: number | null | undefined;
   response_format: ResponseFormat;
 }
 

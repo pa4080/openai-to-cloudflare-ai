@@ -323,8 +323,8 @@ export default {
       tools: data.tools || [],
       tool_resources: data.tool_resources || {}, // Added tool_resources
       metadata: data.metadata || {},
-      temperature: data.temperature ?? 1.0,
-      top_p: data.top_p ?? 1.0,
+      temperature: data.temperature,
+      top_p: data.top_p,
       response_format: data.response_format || "auto"
     };
 
@@ -623,7 +623,7 @@ export default {
       stream: run.stream ?? undefined,
       max_tokens: run.max_completion_tokens ?? undefined,
       temperature: this.mapTemperatureToCloudflare(
-        run.temperature ?? assistant.temperature ?? 1.0
+        run.temperature ?? assistant.temperature ?? undefined
       ),
       top_p: run.top_p ?? assistant.top_p ?? 1.0,
       seed: run.truncation_strategy?.last_messages ?? undefined,
@@ -713,16 +713,17 @@ export default {
     });
   },
 
-  mapTemperatureToCloudflare(openaiTemp = 1.0): number {
+  mapTemperatureToCloudflare(temp: number | null | undefined): number {
     /**
      * Maps OpenAI temperature (0-2) to Cloudflare AI temperature (0-5)
      * @param openaiTemp OpenAI-style temperature (0-2)[1]
      * @returns Cloudflare-optimized temperature (0-5)[0.6]
      */
     // Clamp to OpenAI's valid range
+    const openaiTemp = temp ?? 1;
     const clamped = Math.min(Math.max(openaiTemp, 0), 2);
     // Linear mapping: 0→0, 1→2.5, 2→5
-    return openaiTemp ? Number((clamped * 2.5).toFixed(1)) : 0.6;
+    return !!temp ? Number((clamped * 2.5).toFixed(1)) : 0.6;
   },
 
   getRandomId() {

@@ -1,6 +1,6 @@
 name = "ai-forwarder"
 compatibility_date = "2025-02-21"
-main = "src/index.tsx"
+main = "src/index.ts"
 
 [ai]
 binding = "AI"
