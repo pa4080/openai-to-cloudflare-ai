@@ -1,7 +1,7 @@
 
 interface Env {
   AI: {
-    run: (model: Model, options: Options) => Promise<AiResponse>;
+    run: (model: Model, options: AiPromptInputOptions | AiMessagesInputOptions | AiEmbeddingInputOptions) => Promise<AiNormalResponse | AiEmbeddingResponse | AiStreamResponse>;
   };
   API_KEY: string;
   DEFAULT_AI_MODEL: string;
@@ -13,7 +13,7 @@ interface Env {
 /**
  * AI Request
  */
-interface BaseInputOptions {
+interface AiBaseInputOptions {
   stream?: boolean;
   max_tokens?: number;
   temperature?: number | null | undefined;
@@ -25,17 +25,93 @@ interface BaseInputOptions {
   presence_penalty?: number;
 }
 
-interface PromptInputOptions extends BaseInputOptions {
+interface AiPromptInputOptions extends AiBaseInputOptions {
   prompt: string;
   raw?: boolean;
   lora?: string;
 }
 
+interface AiMessagesInputOptions extends AiBaseInputOptions {
+  messages: ChatMessage[];
+  functions?: Array<{
+    name: string;
+    code: string;
+  }>;
+  tools?: Array<Tool | FunctionTool>;
+}
+
+
+type ChatOptions = AiPromptInputOptions | AiMessagesInputOptions;
+
+interface AiChatRequestParts {
+  model: Model, options: ChatOptions;
+}
+
+interface AiEmbeddingInputOptions {
+  text: string | string[];
+}
+
+interface AiEmbeddingPropsParts {
+  model: Model, options: AiEmbeddingInputOptions;
+}
+
 /**
- * https://platform.openai.com/docs/guides/text-generation
- * OpenAi: 'system' become 'developer'...
- * Cloudflare: The role of the message sender (e.g., 'user', 'assistant', 'system', 'tool').
+ * AI Response
  */
+interface UsageStats {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+}
+
+interface ToolCall {
+  arguments: Record<string, any>;
+  name: string;
+}
+
+interface AiJsonResponse {
+  contentType: "application/json";
+  response: string;
+  usage: UsageStats;
+  tool_calls?: ToolCall[];
+}
+
+type AiStreamResponse = ReadableStream<Uint8Array>;
+type AiNormalResponse = AiJsonResponse | AiStreamResponse;
+type AiEmbeddingResponse = { data: number[][]; shape: number[]; };
+
+/**
+ * Models
+ */
+interface ModelType {
+  id: string,
+  object: "model",
+  description: string,
+  taskName: CfModelTaskName,
+  taskDescription: string;
+  inUse: boolean;
+};
+type Model = ModelType['id'];
+
+/**
+ * OpenAI/WorkerAi Common
+ */
+type ResponseFormat =
+  | "auto"
+  | { type: "text"; }
+  | { type: "json_object"; }
+  | { type: "json_schema"; json_schema: Record<string, any>; };
+
+type ToolChoice =
+  | 'none'
+  | 'auto'
+  | 'required'
+  | { type: 'function'; function: { name: string; }; };
+
+
+// https://platform.openai.com/docs/guides/text-generation
+// OpenAi: 'system' become 'developer'...
+// Cloudflare: The role of the message sender (e.g., 'user', 'assistant', 'system', 'tool').
 type ChatMessageRole = 'user' | 'assistant' | 'developer' | 'system' | 'tool';
 interface ChatMessage {
   role: ChatMessageRole;
@@ -63,72 +139,6 @@ interface FunctionTool {
   type: "function";
   function: Tool;
 }
-
-interface MessagesInputOptions extends BaseInputOptions {
-  messages: ChatMessage[];
-  functions?: Array<{
-    name: string;
-    code: string;
-  }>;
-  tools?: Array<Tool | FunctionTool>;
-}
-
-type Options = PromptInputOptions | MessagesInputOptions;
-
-
-interface CloudflareAiRequestParts {
-  model: Model, options: Options;
-}
-
-/**
- * AI Response
- */
-interface UsageStats {
-  prompt_tokens: number;
-  completion_tokens: number;
-  total_tokens: number;
-}
-
-interface ToolCall {
-  arguments: Record<string, any>;
-  name: string;
-}
-
-interface AiJsonResponse {
-  contentType: "application/json";
-  response: string;
-  usage: UsageStats;
-  tool_calls?: ToolCall[];
-}
-
-type AiStreamResponse = ReadableStream<Uint8Array>;
-
-type AiResponse = AiJsonResponse | AiStreamResponse;
-
-/**
- * Models
- */
-type ModelType = {
-  id: string,
-  object: "model",
-  description: string,
-};
-type Model = ModelType['id'];
-
-/**
- * OpenAI Common
- */
-type ResponseFormat =
-  | "auto"
-  | { type: "text"; }
-  | { type: "json_object"; }
-  | { type: "json_schema"; json_schema: Record<string, any>; };
-
-type ToolChoice =
-  | 'none'
-  | 'auto'
-  | 'required'
-  | { type: 'function'; function: { name: string; }; };
 
 /**
  * ChatCompletions Request
@@ -185,6 +195,32 @@ interface OpenAiChatCompletionReq {
   }>;
 }
 
+/**
+ * Embeddings
+ */
+interface OpenAiEmbeddingReq {
+  input: string | string[];
+  model: string;
+  encoding_format?: 'float' | 'base64';
+  dimensions?: number;
+  user?: string;
+}
+
+interface OpenAiEmbeddingObject {
+  object: 'embedding';
+  index: number;
+  embedding: number[] | string;
+}
+
+interface OpenAiEmbeddingRes {
+  object: 'list';
+  data: OpenAiEmbeddingObject[];
+  model: string;
+  usage: {
+    prompt_tokens: number;
+    total_tokens: number;
+  };
+}
 
 /**
  * Assistant
@@ -197,8 +233,6 @@ interface ToolResources {
     vector_store_ids: string[];
   };
 }
-
-
 
 interface CodeInterpreterTool {
   type: "code_interpreter";
@@ -248,6 +282,9 @@ interface Assistant extends AssistantResponse {
   // Inherits all properties from AssistantResponse
 }
 
+/**
+ * Thread
+ */
 interface Thread {
   id: string;
   object: "thread";

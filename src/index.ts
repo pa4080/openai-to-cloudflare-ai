@@ -1,27 +1,34 @@
 import { textGenerationModels } from "./models";
-let models: ModelType[] = [];
+let globalModels: ModelType[] = [];
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+
     // Authorization check
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ') || authHeader.split(' ')[1] !== env.API_KEY) {
-      return this.errorResponse("Unauthorized", 401);
+
+
+      switch (true) {
+        case url.pathname === '/models/search' && request.method === 'GET':
+          return this.displayModelsInfo(env, request);
+        default:
+          return this.errorResponse("Unauthorized", 401);
+      }
     }
-
-    const url = new URL(request.url);
-
-    await this.listAIModels(env);
 
     switch (true) {
       case url.pathname === '/v1/models':
         return this.handleListModels(env);
+      case url.pathname === '/v1/chat/completions':
+        return this.handleChatCompletions(request, env);
+      case url.pathname === '/v1/embeddings':
+        return this.handleEmbeddings(request, env);
       case url.pathname.startsWith('/v1/assistants'):
         return this.handleAssistants(request, env, url);
       case url.pathname.startsWith('/v1/threads'):
         return this.handleThreads(request, env, url);
-      case url.pathname === '/v1/chat/completions':
-        return this.handleChatCompletions(request, env);
       default:
         return this.errorResponse("Not found", 404);
     }
@@ -55,6 +62,70 @@ export default {
       throw new Error("None of the responses are valid");
     } catch (error) {
       return this.errorResponse("Chat completion failed", 500, (error as Error).message);
+    }
+  },
+
+  async handleEmbeddings(request: Request, env: Env): Promise<Response> {
+    try {
+      const data = await request.json() as OpenAiEmbeddingReq;
+      const { model, input, encoding_format } = data;
+
+      // Validation
+      if (!model || !input) {
+        return this.errorResponse("Model and input are required", 400);
+      }
+
+      // Check if valid embedding model
+      const models = await this.listAIModels(env);
+      const modelInfo = models.find(m =>
+        m.id === model && m.taskName === 'Text Embeddings'
+      );
+      if (!modelInfo) {
+        return this.errorResponse("Invalid embedding model", 400);
+      }
+
+      // Convert OpenAI-style input to Cloudflare's text format
+      const texts = Array.isArray(input) ? input : [input];
+      if (texts.some(t => typeof t !== 'string' || t.length === 0)) {
+        return this.errorResponse("Invalid input format", 400);
+      }
+
+      // Create Cloudflare AI options
+      const options: AiEmbeddingInputOptions = { text: texts };
+
+      // Get embeddings from Cloudflare AI
+      const aiRes = await env.AI.run(model, options);
+
+      if (!('data' in aiRes) || !aiRes?.data || !Array.isArray(aiRes.data)) {
+        return this.errorResponse("Failed to generate embeddings", 500);
+      }
+
+      // Convert to OpenAI format
+      const embeddings: OpenAiEmbeddingObject[] = aiRes.data.map((vector, index) => ({
+        object: 'embedding',
+        index,
+        embedding: encoding_format === 'base64'
+          ? this.floatArrayToBase64(vector)
+          : vector
+      }));
+
+      // Estimate token usage (approximate)
+      const promptTokens = texts.join(' ').split(/\s+/).length;
+
+      return new Response(JSON.stringify({
+        object: 'list',
+        data: embeddings,
+        model,
+        usage: {
+          prompt_tokens: promptTokens,
+          total_tokens: promptTokens
+        }
+      } as OpenAiEmbeddingRes), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+    } catch (error) {
+      return this.errorResponse("Embedding failed", 500, (error as Error).message);
     }
   },
 
@@ -241,9 +312,9 @@ export default {
     });
   },
 
-  transformChatCompletionRequest(request: OpenAiChatCompletionReq, env: Env): CloudflareAiRequestParts {
+  transformChatCompletionRequest(request: OpenAiChatCompletionReq, env: Env): AiChatRequestParts {
     // Base options common to both prompt and messages formats
-    const baseOptions: BaseInputOptions = {
+    const baseOptions: AiBaseInputOptions = {
       stream: request.stream ?? undefined,
       max_tokens: request.max_completion_tokens ?? request.max_tokens ?? undefined,
       temperature: this.mapTemperatureToCloudflare(request?.temperature ?? undefined),
@@ -270,7 +341,7 @@ export default {
     });
 
     // Always use messages interface since we're working with chat completions
-    const options: MessagesInputOptions = {
+    const options: AiMessagesInputOptions = {
       ...baseOptions,
       messages: request.messages.map(msg => ({
         role: msg.role,
@@ -617,9 +688,9 @@ export default {
     run: ThreadRun,
     assistant: Assistant,
     messages: ChatMessage[],
-  ): CloudflareAiRequestParts {
+  ): AiChatRequestParts {
     // Base options from both run configuration and assistant defaults
-    const baseOptions: BaseInputOptions = {
+    const baseOptions: AiBaseInputOptions = {
       stream: run.stream ?? undefined,
       max_tokens: run.max_completion_tokens ?? undefined,
       temperature: this.mapTemperatureToCloudflare(
@@ -641,7 +712,7 @@ export default {
         content: 'Respond using JSON format'
       }] : [];
 
-    const options: MessagesInputOptions = {
+    const options: AiMessagesInputOptions = {
       ...baseOptions,
       messages: [
         ...systemMessages,
@@ -726,6 +797,12 @@ export default {
     return !!temp ? Number(temp) === 1 ? 0.6 : Number((clamped * 2.5).toFixed(1)) : 0.6;
   },
 
+  floatArrayToBase64(vector: number[]): string {
+    const float32 = new Float32Array(vector);
+    const uint8 = new Uint8Array(float32.buffer);
+    return btoa(String.fromCharCode(...uint8));
+  },
+
   getRandomId() {
     return crypto.randomUUID().split('-')[0];
   },
@@ -739,46 +816,90 @@ export default {
   },
 
   async listAIModels(env: Env) {
-    if (models.length > 0) {
-      return models;
-    }
+    if (globalModels.length > 0) return globalModels;
 
-    if (!env?.CF_ACCOUNT_ID || !env?.CF_API_KEY) {
-      models = textGenerationModels;
-      return models;
-    }
+    globalModels = textGenerationModels;
+    if (!env?.CF_ACCOUNT_ID || !env?.CF_API_KEY) return globalModels;
 
-    const accountId = env.CF_ACCOUNT_ID;
-    const apiToken = env.CF_API_KEY;
-    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/models/search`;
+    const response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/ai/models/search`,
+      {
+        method: 'GET', headers: { Authorization: `Bearer ${env.CF_API_KEY}` }
+      });
 
-    console.log({ apiToken, accountId, url });
-
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${apiToken}`,
-      }
-    });
-
-
-    if (!response.ok) {
-      models = textGenerationModels;
-      return models;
-    }
+    if (!response.ok) return globalModels;
 
     const data = await response.json() as FetchModelsResponse;
-    const textGenModels: ModelType[] = data
-      .result.filter((model) => model.task.name === "Text Generation")
+    const modelTypesInUse = [
+      "Text Generation",
+      "Text Embeddings",
+      "Translation",
+      "Text Classification",
+      "Summarization"
+    ];
+
+    globalModels = data
+      .result
       .map((model) => ({
         id: model.name,
         object: 'model',
-        description: model.description
+        description: model.description,
+        taskName: model.task.name,
+        taskDescription: model.task.description,
+        inUse: modelTypesInUse.includes(model.task.name)
       }));
 
-
-    models = textGenModels;
-    return models;
+    return globalModels;
   },
+
+  async displayModelsInfo(env: Env, request: Request) {
+    const models = await this.listAIModels(env);
+    const searchParams = new URL(request.url).searchParams;
+    const query = searchParams.get('query');
+
+    if (query && query === 'json') {
+      return new Response(
+        JSON.stringify({ data: models }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const html = `
+      <style>
+        table { padding: 1rem; font-family: sans; }
+        th, td { border: 1px solid gray; padding: 0.5rem; }
+        td { vertical-align: top; }
+        cose, pre: { font-family: monospace; }
+      </style>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Id (Name)</th>
+            <th>Task Name</th>
+            <th>In use</th>
+            <th>Description</th>
+          </tr>
+        <thead>
+        <tbody>
+        ${models.sort((a, b) => a.taskName.localeCompare(b.taskName)).map((model, index) => `
+          <tr>
+            <td>${index + 1}</td>
+            <td><pre><b style="font-size: 1.05rem;">${model.id}</b></pre></td>
+            <td>${model.taskName}</td>
+            <td style="text-align: center;">${model.inUse ? "<b>Yes</b>" : "No"}</td>
+            <td>
+              <p><b>Model:</b> ${model.description}</p>
+              <p><b>Task:</b> ${model.taskDescription}</p>
+            </td>
+          </tr>
+        `).join('')}
+        </tbody>
+      </table>
+    `;
+
+    return new Response(html, { headers: { 'Content-Type': 'text/html' } });
+
+  },
+
 };
