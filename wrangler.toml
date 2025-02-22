@@ -1,6 +1,7 @@
 name = "ai-forwarder"
 compatibility_date = "2025-02-21"
 main = "src/index.ts"
+assets = { directory = "public", binding = "ASSETS" }
 
 [ai]
 binding = "AI"
