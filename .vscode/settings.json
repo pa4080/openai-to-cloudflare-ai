@@ -1,5 +1,5 @@
 {
-  "cSpell.words": ["chatcmpl", "cloudflare"],
+  "cSpell.words": ["chatcmpl", "cloudflare", "logprobs"],
   "prettier.jsxSingleQuote": false,
   "prettier.singleQuote": false,
   "javascript.preferences.quoteStyle": "double",

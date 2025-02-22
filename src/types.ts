@@ -1,7 +1,7 @@
 
 interface Env {
 	AI: {
-		run: (request: CloudflareAiRequest) => Promise<AiResponse>;
+		run: (model: Model, options: Options) => Promise<AiResponse>;
 	};
 	API_KEY: string;
 	DEFAULT_AI_MODEL: string;
@@ -77,7 +77,7 @@ interface MessagesInputOptions extends BaseInputOptions {
 type Options = PromptInputOptions | MessagesInputOptions;
 
 
-interface CloudflareAiRequest {
+interface CloudflareAiRequestParts {
 	model: Model, options: Options;
 }
 
@@ -102,10 +102,7 @@ interface AiJsonResponse {
 	tool_calls?: ToolCall[];
 }
 
-interface AiStreamResponse {
-	contentType: "text/event-stream";
-	format: ReadableStream<Uint8Array>;
-}
+type AiStreamResponse = ReadableStream<Uint8Array>;
 
 type AiResponse = AiJsonResponse | AiStreamResponse;
 
@@ -141,46 +138,13 @@ interface AssistantCreateParams {
 /**
  * Models
  */
-const date = new Date().toDateString();
-const models = [{
-	id: "@cf/meta/llama-3-8b-instruct",
+type ModelType = {
+	id: string,
 	object: "model",
-	created: date,
-	owned_by: "cloudflare",
-	description: "Generation over generation, Meta Llama 3 demonstrates state-of-the-art performance on a wide range of industry benchmarks and offers new capabilities, including improved reasoning."
-}, {
-	id: "@cf/meta/llama-3.2-1b-instruct",
-	object: "model",
-	created: date,
-	owned_by: "cloudflare",
-	description: "The Llama 3.2 instruction-tuned text only models are optimized for multilingual dialogue use cases, including agentic retrieval and summarization tasks."
-}, {
-	id: "@cf/meta/llama-3.2-3b-instruct",
-	object: "model",
-	created: date,
-	owned_by: "cloudflare",
-	description: "The Llama 3.2 instruction-tuned text only models are optimized for multilingual dialogue use cases, including agentic retrieval and summarization tasks."
-}, {
-	id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-	object: "model",
-	created: date,
-	owned_by: "cloudflare",
-	description: "Llama 3.3 70B quantized to fp8 precision, optimized to be faster."
-}, {
-	id: "@cf/mistral/mistral-7b-instruct-v0.1",
-	object: "model",
-	created: date,
-	owned_by: "cloudflare",
-	description: "Instruct fine-tuned version of the Mistral-7b generative text model with 7 billion parameters."
-}, {
-	id: "@hf/mistral/mistral-7b-instruct-v0.2",
-	object: "model",
-	created: date,
-	owned_by: "cloudflare",
-	description: "(beta) The Mistral-7B-Instruct-v0.2 Large Language Model (LLM) is an instruct fine-tuned version of the Mistral-7B-v0.2. Mistral-7B-v0.2 has the following changes compared to Mistral-7B-v0.1: 32k context window (vs 8k context in v0.1), rope-theta = 1e6, and no Sliding-Window Attention."
-}] as const;
-
-type ModelType = typeof models[number];
+	created: string,
+	owned_by: string,
+	description: string,
+};
 type Model = ModelType['id'];
 
 /**

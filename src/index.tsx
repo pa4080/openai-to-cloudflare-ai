@@ -1,3 +1,5 @@
+import { models } from "./models";
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     // Authorization check
@@ -126,14 +128,16 @@ export default {
       const data = await request.json() as OpenAiChatCmplReq;
       const { model: reqModel, options } = this.transformRequest(data);
       const model = reqModel || env.DEFAULT_AI_MODEL;
-      console.log("Model in use", model); // Log the model in use
+      console.log("Model in use:", model); // Log the model in use
 
       // Run the AI inference
-      const response = await env.AI.run({ model: model, options });
+      const response = await env.AI.run(model, options);
+
+      console.log("Response:", response); // Log the response
 
       // Handle streaming response
-      if (options.stream && 'format' in response && !!response.format) {
-        return this.handleStreamResponse(response, model);
+      if (options.stream && response instanceof ReadableStream) {
+        return await this.handleStreamResponse(response, model);
       }
 
       // Format standard response
@@ -147,82 +151,98 @@ export default {
     }
   },
 
-  handleStreamResponse(result: AiStreamResponse, model: string): Response {
-    // Generate consistent ID and timestamp for all chunks
-    const id = `chatcmpl-${Date.now()}`;
-    const created = Math.floor(Date.now() / 1000);
-    const systemFingerprint = "fp_" + crypto.randomUUID().slice(0, 8);
+  async handleStreamResponse(responseStream: AiStreamResponse, model: Model) {
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    const timestamp = Date.now();
 
-    // Create transform stream to format SSE events
-    const transformer = new TransformStream<Uint8Array, Uint8Array>({
-      start(controller) {
-        // Send initial chunk with assistant role
-        const initialChunk = JSON.stringify({
-          id,
-          object: "chat.completion.chunk",
-          created,
-          model,
-          system_fingerprint: systemFingerprint,
-          choices: [{
-            index: 0,
-            delta: { role: "assistant", content: "" },
-            logprobs: null,
-            finish_reason: null
-          }]
-        });
-        controller.enqueue(new TextEncoder().encode(`data: ${initialChunk}\n\n`));
-      },
-      transform(chunk: Uint8Array, controller) {
-        // Decode the Cloudflare AI chunk
-        const content = new TextDecoder().decode(chunk);
+    const stream = new ReadableStream({
+      async start(controller) {
+        const reader = responseStream.getReader();
 
-        // Format as OpenAI-compatible SSE chunk
-        const dataChunk = JSON.stringify({
-          id,
-          object: "chat.completion.chunk",
-          created,
-          model,
-          system_fingerprint: systemFingerprint,
-          choices: [{
-            index: 0,
-            delta: { content },
-            logprobs: null,
-            finish_reason: null
-          }]
-        });
 
-        controller.enqueue(new TextEncoder().encode(`data: ${dataChunk}\n\n`));
-      },
-      flush(controller) {
-        // Send final chunk with stop reason
-        const finalChunk = JSON.stringify({
-          id,
+        // Metadata for response
+        const metadata = {
+          id: `chatcmpl-${timestamp}-start`,
           object: "chat.completion.chunk",
-          created,
+          created: Math.floor(timestamp / 1000),
           model,
-          system_fingerprint: systemFingerprint,
-          choices: [{
-            index: 0,
-            delta: {},
-            logprobs: null,
-            finish_reason: "stop"
-          }]
-        });
-        controller.enqueue(new TextEncoder().encode(`data: ${finalChunk}\n\n`));
+          system_fingerprint: `fp_${crypto.randomUUID().split("-")[0]}`,
+        };
+
+        // Send initial empty delta
+        controller.enqueue(
+          encoder.encode(
+            JSON.stringify({
+              ...metadata,
+              choices: [{ index: 0, delta: { role: "assistant", content: "" }, logprobs: null, finish_reason: null }]
+            }) + "\n"
+          )
+        );
+
+        let done = false;
+        while (!done) {
+          const { value, done: streamDone } = await reader.read();
+          if (streamDone) break;
+
+          const text = decoder.decode(value, { stream: true });
+          const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
+
+          for (const line of lines) {
+            if (line === "data: [DONE]") {
+              done = true;
+              break;
+            }
+
+            if (line.startsWith("data: ")) {
+              try {
+                const parsed = JSON.parse(line.slice(6));
+                if (parsed.response) {
+                  controller.enqueue(
+                    encoder.encode(
+                      JSON.stringify({
+                        ...metadata,
+                        id: `chatcmpl-${parsed.p}`,
+                        choices: [{ index: 0, delta: { content: parsed.response }, logprobs: null, finish_reason: null }]
+                      }) + "\n"
+                    )
+                  );
+                }
+                if (parsed.usage) {
+                  done = true;
+                  break;
+                }
+              } catch (err) {
+                console.error("Error parsing JSON:", err);
+              }
+            }
+          }
+        }
+
+        // Send final message with finish_reason
+        controller.enqueue(
+          encoder.encode(
+            JSON.stringify({
+              ...metadata,
+              id: `chatcmpl-${timestamp}-end`,
+              choices: [{ index: 0, delta: {}, logprobs: null, finish_reason: "stop" }]
+            }) + "\n"
+          )
+        );
+
+        controller.close();
       }
     });
 
-    // Pipe the Cloudflare AI stream through our transformer
-    const readableStream = result.format.pipeThrough(transformer);
-
-    return new Response(readableStream, {
+    return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive'
       }
     });
-  },
+  }
+  ,
 
   formatCompletion(result: AiJsonResponse, model: string) {
     const response = {
@@ -290,7 +310,7 @@ export default {
     });
   },
 
-  transformRequest(request: OpenAiChatCmplReq): CloudflareAiRequest {
+  transformRequest(request: OpenAiChatCmplReq): CloudflareAiRequestParts {
     // Base options common to both prompt and messages formats
     const baseOptions: BaseInputOptions = {
       stream: request.stream ?? undefined,
