@@ -1,4 +1,4 @@
-import { openAiEmbeddingsModels, textGenerationModels } from "./models";
+import { textGenerationModels } from "./models";
 let globalModels: ModelType[] = [];
 
 export default {
@@ -830,7 +830,7 @@ export default {
   async listAIModels(env: Env) {
     if (globalModels.length > 0) return globalModels;
 
-    globalModels = [...textGenerationModels, ...openAiEmbeddingsModels];
+    globalModels = textGenerationModels;
     if (!env?.CF_ACCOUNT_ID || !env?.CF_API_KEY) return globalModels;
 
     const response = await fetch(
@@ -862,7 +862,7 @@ export default {
         inUse: modelTypesInUse.includes(model.task.name)
       }));
 
-    globalModels = [...models, ...openAiEmbeddingsModels];
+    globalModels = models;
 
     return globalModels;
   },
