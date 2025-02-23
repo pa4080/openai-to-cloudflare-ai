@@ -1,4 +1,4 @@
-import { OPENAI_TO_CLOUDFLARE_MODELS, openAiEmbeddingsModels, textGenerationModels } from "./models";
+import { openAiEmbeddingsModels, textGenerationModels } from "./models";
 let globalModels: ModelType[] = [];
 
 export default {
@@ -68,21 +68,18 @@ export default {
   async handleEmbeddings(request: Request, env: Env): Promise<Response> {
     try {
       const data = await request.json() as OpenAiEmbeddingReq;
-      const { model, input, encoding_format } = data;
-
-      // Map OpenAI model ID to Cloudflare model. We need this mapping because n8n ask for concrete embeddings models
-      const requestedModel = model as keyof typeof OPENAI_TO_CLOUDFLARE_MODELS;
-      const cfModelMapped = OPENAI_TO_CLOUDFLARE_MODELS[requestedModel] || requestedModel;
+      const { model: requestedModel, input, encoding_format } = data;
+      const model = this.getCfModelName(requestedModel, env);
 
       // Validation
-      if (!cfModelMapped || !input) {
+      if (!model || !input) {
         return this.errorResponse("Model and input are required", 400);
       }
 
       // Check if valid embedding model
       const models = await this.listAIModels(env);
       const modelInfo = models.find(m =>
-        m.id === cfModelMapped && m.taskName === 'Text Embeddings'
+        m.name === model && m.taskName === 'Text Embeddings'
       );
       if (!modelInfo) {
         return this.errorResponse("Invalid embedding model", 400);
@@ -98,7 +95,7 @@ export default {
       const options: AiEmbeddingInputOptions = { text: texts };
 
       // Get embeddings from Cloudflare AI
-      const aiRes = await env.AI.run(cfModelMapped, options);
+      const aiRes = await env.AI.run(model, options);
 
       if (!('data' in aiRes) || !aiRes?.data || !Array.isArray(aiRes.data)) {
         return this.errorResponse("Failed to generate embeddings", 500);
@@ -119,7 +116,7 @@ export default {
       return new Response(JSON.stringify({
         object: 'list',
         data: embeddings,
-        model: cfModelMapped,
+        model: model, // Cloudflare AI model, also we can return 'requestedModel' as it was requested?
         usage: {
           prompt_tokens: promptTokens,
           total_tokens: promptTokens
@@ -370,7 +367,7 @@ export default {
     }
 
     return {
-      model: request?.model ?? env.DEFAULT_AI_MODEL,
+      model: this.getCfModelName(request?.model, env),
       options: options
     };
   },
@@ -386,6 +383,7 @@ export default {
     if (data.name && data.name.length > 256) return this.errorResponse("Name exceeds 256 characters", 400);
     if (data.description && data.description.length > 512) return this.errorResponse("Description exceeds 512 characters", 400);
 
+    const model = this.getCfModelName(data.model, env);
     const assistantId = `asst_${this.getRandomId()}`;
     const assistant: Assistant = {
       id: assistantId,
@@ -393,7 +391,7 @@ export default {
       created_at: Math.floor(Date.now() / 1000),
       name: data.name || null,
       description: data.description || null,
-      model: data.model,
+      model: model,
       instructions: data.instructions || null,
       tools: data.tools || [],
       tool_resources: data.tool_resources || {}, // Added tool_resources
@@ -456,7 +454,7 @@ export default {
     // Merge updates with existing assistant
     const updatedAssistant: Assistant = {
       ...existingAssistant,
-      model: data.model ?? existingAssistant.model,
+      model: this.getCfModelName(data.model ?? existingAssistant.model, env),
       name: data.name ?? existingAssistant.name,
       description: data.description ?? existingAssistant.description,
       instructions: data.instructions ?? existingAssistant.instructions,
@@ -594,7 +592,7 @@ export default {
         assistant_id: data.assistant_id,
         status: "queued",
         tool_resources: data?.tool_resources || threadCache?.tool_resources || {},
-        model: data.model || env.DEFAULT_AI_MODEL,
+        model: this.getCfModelName(data.model, env),
         usage: null
       };
 
@@ -620,7 +618,7 @@ export default {
       ) || [];
 
       // Transform the request using the new method;
-      const { model, options } = this.transformThreadRunRequest(run, assistant, messages);
+      const { model, options } = this.transformThreadRunRequest(run, assistant, messages, env);
 
       // Execute AI run with properly typed options
       const aiRes = await env.AI.run(model, options);
@@ -632,12 +630,12 @@ export default {
 
       // Handle stream response
       if (run?.stream && aiRes instanceof ReadableStream) {
-        return this.chatStreamResponse(aiRes, run.model);
+        return this.chatStreamResponse(aiRes, model);
       }
 
       // Format standard response
       if (!options.stream && 'response' in aiRes && !!aiRes.response) {
-        return this.chatNormalResponse(aiRes, run.model);
+        return this.chatNormalResponse(aiRes, model);
       }
 
       throw new Error("None of the responses are valid");
@@ -692,6 +690,7 @@ export default {
     run: ThreadRun,
     assistant: Assistant,
     messages: ChatMessage[],
+    env: Env
   ): AiChatRequestParts {
     // Base options from both run configuration and assistant defaults
     const baseOptions: AiBaseInputOptions = {
@@ -729,7 +728,7 @@ export default {
     };
 
     return {
-      model: assistant.model,
+      model: this.getCfModelName(assistant.model, env),
       options: options
     };
   },
@@ -846,6 +845,7 @@ export default {
       .result
       .map((model) => ({
         id: `${model.name}#${model.task.name.toLocaleLowerCase().replace(' ', '-')}`,
+        name: model.name,
         object: 'model',
         description: model.description,
         taskName: model.task.name,
@@ -858,7 +858,15 @@ export default {
     return globalModels;
   },
 
-
+  /**
+   * We decide to tag the model type in the Id, i.e: @cf/google/gemma-2b-it-lora#text-generation
+   * So from this function we return the model name which must bne used wit the AI embedding.
+   */
+  getCfModelName(modelId: string | undefined, env: Env) {
+    return globalModels.find(model => model.id === modelId)?.name
+      || globalModels.find(model => model.name === modelId)?.name
+      || env.DEFAULT_AI_MODEL;
+  },
 
   async displayModelsInfo(env: Env, request: Request) {
     const models = await this.listAIModels(env);
@@ -907,7 +915,6 @@ export default {
     `;
 
     return new Response(html, { headers: { 'Content-Type': 'text/html' } });
-
   },
 
 };

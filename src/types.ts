@@ -85,6 +85,7 @@ type AiEmbeddingResponse = { data: number[][]; shape: number[]; };
  */
 interface ModelType {
   id: string,
+  name: string,
   object: "model",
   description: string,
   taskName: CfModelTaskName,
