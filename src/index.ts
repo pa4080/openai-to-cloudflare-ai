@@ -4,10 +4,12 @@ let globalModels: ModelType[] = [];
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    console.log(url.pathname);
 
     // Authorization check
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ') || authHeader.split(' ')[1] !== env.API_KEY) {
+
 
 
       switch (true) {
@@ -46,8 +48,9 @@ export default {
   async handleChatCompletions(request: Request, env: Env) {
     try {
       const data = await request.json() as OpenAiChatCompletionReq;
+      console.log(data.model);
       const { model, options } = this.transformChatCompletionRequest(data, env);
-      console.log("Model in use:", model); // Log the model in use
+      console.log("Model in use:", model, 'Stream', options?.stream); // Log the model in use
 
       const aiRes = await env.AI.run(model, options);
 
@@ -70,6 +73,7 @@ export default {
       const data = await request.json() as OpenAiEmbeddingReq;
       const { model: requestedModel, input, encoding_format } = data;
       const model = this.getCfModelName(requestedModel, env);
+
 
       // Validation
       if (!model || !input) {
@@ -199,28 +203,30 @@ export default {
     const decoder = new TextDecoder();
     const timestamp = Date.now();
     const system_fingerprint = `fp_${this.getRandomId()}`;
+    const completionId = `chatcmpl-${timestamp}`;
+    let index = 0;
 
     const stream = new ReadableStream({
       async start(controller) {
         const reader = responseStream.getReader();
 
-
         // Metadata for response
         const metadata = {
-          id: `chatcmpl-${timestamp}-start`,
+          id: completionId,
           object: "chat.completion.chunk",
           created: Math.floor(timestamp / 1000),
           model,
+          service_tier: "default",
           system_fingerprint,
         };
 
         // Send initial empty delta
         controller.enqueue(
           encoder.encode(
-            JSON.stringify({
+            'data: ' + JSON.stringify({
               ...metadata,
-              choices: [{ index: 0, delta: { role: "assistant", content: "" }, logprobs: null, finish_reason: null }]
-            }) + "\n"
+              choices: [{ index: index, delta: { role: "assistant", content: "", refusal: null }, logprobs: null, finish_reason: null }]
+            }) + "\n\n"
           )
         );
 
@@ -230,7 +236,9 @@ export default {
           if (streamDone) break;
 
           const text = decoder.decode(value, { stream: true });
-          const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
+          const lines = text.split(/\r?\n\n/).filter(line => line.trim() !== "");
+
+          console.log(lines);
 
           for (const line of lines) {
             if (line === "data: [DONE]") {
@@ -244,11 +252,11 @@ export default {
                 if (parsed.response) {
                   controller.enqueue(
                     encoder.encode(
-                      JSON.stringify({
+                      'data: ' + JSON.stringify({
                         ...metadata,
-                        id: `chatcmpl-${parsed.p}`,
-                        choices: [{ index: 0, delta: { content: parsed.response }, logprobs: null, finish_reason: null }]
-                      }) + "\n"
+                        id: completionId,
+                        choices: [{ index: index, delta: { content: parsed.response }, logprobs: null, finish_reason: null }]
+                      }) + "\n\n"
                     )
                   );
                 }
@@ -266,17 +274,18 @@ export default {
         // Send final message with finish_reason
         controller.enqueue(
           encoder.encode(
-            JSON.stringify({
+            'data: ' + JSON.stringify({
               ...metadata,
-              id: `chatcmpl-${timestamp}-end`,
-              choices: [{ index: 0, delta: {}, logprobs: null, finish_reason: "stop" }]
-            }) + "\n"
+              id: completionId,
+              choices: [{ index: index, delta: {}, logprobs: null, finish_reason: "stop" }]
+            }) + "\n\ndata: [DONE]\n\n"
           )
         );
 
         controller.close();
       }
     });
+
 
     return new Response(stream, {
       headers: {
@@ -863,9 +872,7 @@ export default {
    * So from this function we return the model name which must bne used wit the AI embedding.
    */
   getCfModelName(modelId: string | undefined, env: Env) {
-    return globalModels.find(model => model.id === modelId)?.name
-      || globalModels.find(model => model.name === modelId)?.name
-      || env.DEFAULT_AI_MODEL;
+    return modelId?.replace(/#.*$/, '') || env.DEFAULT_AI_MODEL;
   },
 
   async displayModelsInfo(env: Env, request: Request) {

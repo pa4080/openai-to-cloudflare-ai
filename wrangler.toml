@@ -18,3 +18,5 @@ preview_id = "0ac8524517094753a46477bf1561f63d"
 [observability.logs]
 enabled = true
 
+[dev]
+host = "dev-worker.metalevel.tech"
