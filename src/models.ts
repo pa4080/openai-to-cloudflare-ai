@@ -42,3 +42,19 @@ export const textGenerationModels: ModelType[] = [{
 	description: "BAAI general embedding (Base) model that transforms any given text into a 768-dimensional vector.",
 	taskDescription: "Feature extraction models transform raw data into numerical features that can be processed while preserving the information in the original dataset. These models are ideal as part of building vector search applications or Retrieval Augmented Generation workflows with Large Language Models (LLM)."
 }];
+
+export const OPENAI_TO_CLOUDFLARE_MODELS = {
+	// Embeddings mappings
+	'text-embedding-3-small': '@cf/baai/bge-small-en-v1.5',
+	'text-embedding-3-large': '@cf/baai/bge-large-en-v1.5',
+	'text-embedding-ada-002': '@cf/baai/bge-base-en-v1.5',
+};
+
+export const openAiEmbeddingsModels: ModelType[] = Object.entries(OPENAI_TO_CLOUDFLARE_MODELS).map(([id, cfId]) => ({
+	id,
+	object: "model" as const,
+	description: `<b>${cfId}</b>`,
+	taskName: "Text Embeddings" as CfModelTaskName,
+	taskDescription: "Mapped OpenAI to Cloudflare equivalent Embeddings model. We need this mapping because n8n ask for concrete embeddings models.",
+	inUse: true
+}));

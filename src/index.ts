@@ -1,4 +1,4 @@
-import { textGenerationModels } from "./models";
+import { OPENAI_TO_CLOUDFLARE_MODELS, openAiEmbeddingsModels, textGenerationModels } from "./models";
 let globalModels: ModelType[] = [];
 
 export default {
@@ -70,15 +70,19 @@ export default {
       const data = await request.json() as OpenAiEmbeddingReq;
       const { model, input, encoding_format } = data;
 
+      // Map OpenAI model ID to Cloudflare model. We need this mapping because n8n ask for concrete embeddings models
+      const requestedModel = model as keyof typeof OPENAI_TO_CLOUDFLARE_MODELS;
+      const cfModelMapped = OPENAI_TO_CLOUDFLARE_MODELS[requestedModel] || requestedModel;
+
       // Validation
-      if (!model || !input) {
+      if (!cfModelMapped || !input) {
         return this.errorResponse("Model and input are required", 400);
       }
 
       // Check if valid embedding model
       const models = await this.listAIModels(env);
       const modelInfo = models.find(m =>
-        m.id === model && m.taskName === 'Text Embeddings'
+        m.id === cfModelMapped && m.taskName === 'Text Embeddings'
       );
       if (!modelInfo) {
         return this.errorResponse("Invalid embedding model", 400);
@@ -94,7 +98,7 @@ export default {
       const options: AiEmbeddingInputOptions = { text: texts };
 
       // Get embeddings from Cloudflare AI
-      const aiRes = await env.AI.run(model, options);
+      const aiRes = await env.AI.run(cfModelMapped, options);
 
       if (!('data' in aiRes) || !aiRes?.data || !Array.isArray(aiRes.data)) {
         return this.errorResponse("Failed to generate embeddings", 500);
@@ -115,7 +119,7 @@ export default {
       return new Response(JSON.stringify({
         object: 'list',
         data: embeddings,
-        model,
+        model: cfModelMapped,
         usage: {
           prompt_tokens: promptTokens,
           total_tokens: promptTokens
@@ -818,7 +822,7 @@ export default {
   async listAIModels(env: Env) {
     if (globalModels.length > 0) return globalModels;
 
-    globalModels = textGenerationModels;
+    globalModels = [...textGenerationModels, ...openAiEmbeddingsModels];
     if (!env?.CF_ACCOUNT_ID || !env?.CF_API_KEY) return globalModels;
 
     const response = await fetch(
@@ -838,10 +842,10 @@ export default {
       "Summarization"
     ];
 
-    globalModels = data
+    const models: ModelType[] = data
       .result
       .map((model) => ({
-        id: model.name,
+        id: `${model.name}#${model.task.name.toLocaleLowerCase().replace(' ', '-')}`,
         object: 'model',
         description: model.description,
         taskName: model.task.name,
@@ -849,8 +853,12 @@ export default {
         inUse: modelTypesInUse.includes(model.task.name)
       }));
 
+    globalModels = [...models, ...openAiEmbeddingsModels];
+
     return globalModels;
   },
+
+
 
   async displayModelsInfo(env: Env, request: Request) {
     const models = await this.listAIModels(env);
