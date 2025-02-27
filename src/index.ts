@@ -173,8 +173,15 @@ export default {
         return this.handleThreadRuns(request, env, threadId);
       }
 
-      if (url.pathname.endsWith('/threads') && request.method === 'POST') {
-        return this.createThread(request, env);
+      if (url.pathname.endsWith('/threads')) {
+        switch (request.method) {
+          case 'POST':
+            return this.createThread(request, env);
+          case 'GET':
+            return this.listThreads(env);
+          default:
+            return this.errorResponse("Method not allowed", 405);
+        }
       }
 
       const threadId = url.pathname.split('/').pop() || '';
@@ -504,6 +511,9 @@ export default {
 
   async deleteAssistant(env: Env, assistantId: string) {
     const key = `assistant:${assistantId}`;
+    const assistant = await env.CACHE.get<Assistant>(key, "json");
+    if (!assistant) return this.errorResponse("Assistant not found", 404);
+
     await env.CACHE.delete(key);
     return new Response(JSON.stringify({
       id: assistantId,
@@ -542,6 +552,19 @@ export default {
     });
   },
 
+  async listThreads(env: Env) {
+    const list = await env.CACHE.list({ prefix: "thread:" });
+    const threads = await Promise.all(
+      list.keys.map(async k => await env.CACHE.get<Thread>(k.name, "json"))
+    );
+
+    return new Response(JSON.stringify({
+      object: "list",
+      data: threads.filter(Boolean),
+      has_more: false
+    }), { headers: { 'Content-Type': 'application/json' } });
+  },
+
   async modifyThread(request: Request, env: Env, threadId: string) {
     const key = `thread:${threadId}`;
     const existingThread = await env.CACHE.get<Thread>(key, "json");
@@ -576,6 +599,51 @@ export default {
     await env.CACHE.put(key, JSON.stringify(updatedThread));
 
     return new Response(JSON.stringify(updatedThread), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  },
+
+  async retrieveThread(env: Env, threadId: string) {
+    const key = `thread:${threadId}`;
+    const thread = await env.CACHE.get<Thread>(key, "json");
+    if (!thread) return this.errorResponse("Thread not found", 404);
+
+    // Get thread messages if they exist
+    const messages = await env.CACHE.get<ChatMessage[]>(
+      `${key}:messages`,
+      "json"
+    ) || [];
+
+    const response = {
+      ...thread,
+      messages: messages.map(msg => ({
+        id: `msg_${this.getRandomId()}`,
+        created_at: Math.floor(Date.now() / 1000),
+        ...msg
+      }))
+    };
+
+    return new Response(JSON.stringify(response), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  },
+
+  async deleteThread(env: Env, threadId: string) {
+    const key = `thread:${threadId}`;
+    const thread = await env.CACHE.get<Thread>(key, "json");
+    if (!thread) return this.errorResponse("Thread not found", 404);
+
+    // Delete both thread metadata and messages
+    await Promise.all([
+      env.CACHE.delete(key),
+      env.CACHE.delete(`${key}:messages`)
+    ]);
+
+    return new Response(JSON.stringify({
+      id: threadId,
+      object: "thread.deleted",
+      deleted: true
+    }), {
       headers: { 'Content-Type': 'application/json' }
     });
   },
@@ -651,48 +719,6 @@ export default {
     } catch (error) {
       return this.errorResponse("Chat completion failed", 500, (error as Error).message);
     }
-  },
-
-  async retrieveThread(env: Env, threadId: string) {
-    const key = `thread:${threadId}`;
-    const thread = await env.CACHE.get<Thread>(key, "json");
-    if (!thread) return this.errorResponse("Thread not found", 404);
-
-    // Get thread messages if they exist
-    const messages = await env.CACHE.get<ChatMessage[]>(
-      `${key}:messages`,
-      "json"
-    ) || [];
-
-    const response = {
-      ...thread,
-      messages: messages.map(msg => ({
-        id: `msg_${this.getRandomId()}`,
-        created_at: Math.floor(Date.now() / 1000),
-        ...msg
-      }))
-    };
-
-    return new Response(JSON.stringify(response), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  },
-
-  async deleteThread(env: Env, threadId: string) {
-    const key = `thread:${threadId}`;
-    // Delete both thread metadata and messages
-    await Promise.all([
-      env.CACHE.delete(key),
-      env.CACHE.delete(`${key}:messages`)
-    ]);
-
-    return new Response(JSON.stringify({
-      id: threadId,
-      object: "thread.deleted",
-      deleted: true
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
   },
 
   transformThreadRunRequest(
