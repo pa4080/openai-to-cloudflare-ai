@@ -172,14 +172,7 @@ interface OpenAiChatCompletionReq {
   } | null;
   temperature?: number | null; // 0-2, default 1
   top_p?: number | null; // 0-1, default 1
-  tools?: Array<{
-    type: 'function';
-    function: {
-      name: string;
-      description?: string;
-      parameters: Record<string, any>;
-    };
-  }>; // Max 128 tools
+  tools?: Assistant['tools']; // Max 128 tools
   tool_choice?: ToolChoice;
   parallel_tool_calls?: boolean; // Default true
   user?: string; // End-user identifier

@@ -86,6 +86,7 @@ Notes:
 - [Cloudflare AI SDK](https://developers.cloudflare.com/workers-ai/configuration/ai-sdk/)
 - [Cloudflare OpenAI compatible API endpoints](https://developers.cloudflare.com/workers-ai/configuration/open-ai-compatibility/)
 - [Cloudflare Vectorize](https://developers.cloudflare.com/vectorize/get-started/embeddings/)
+- [Cloudflare Agents](https://developers.cloudflare.com/agents/)
 - [DeepSeek: Helping with OpenAI to CfWorkerAI Part1](https://chat.deepseek.com/a/chat/s/71155bf0-ee66-46a4-9599-ab074c39e447)
 - [DeepSeek: Helping with OpenAI to CfWorkerAI Part2](https://chat.deepseek.com/a/chat/s/38512169-41af-4a4b-8e8f-b3c1b0affa07)
 - [DeepSeek: Helping with OpenAI to CfWorkerAI Part3](hhttps://chat.deepseek.com/a/chat/s/bc1f4584-b831-4364-9b5a-775f740c866d)

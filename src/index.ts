@@ -245,8 +245,6 @@ export default {
           const text = decoder.decode(value, { stream: true });
           const lines = text.split(/\r?\n\n/).filter(line => line.trim() !== "");
 
-          console.log(lines);
-
           for (const line of lines) {
             if (line === "data: [DONE]") {
               done = true;
@@ -342,20 +340,11 @@ export default {
       presence_penalty: request.presence_penalty ?? undefined
     };
 
-    // Handle tools conversion
-    const tools = (request.tools || request.functions)?.map(tool => {
-      if ('function' in tool) { // Handle OpenAI-style tools
-        return {
-          type: 'function',
-          function: {
-            name: tool.function.name,
-            description: tool.function.description || '',
-            parameters: tool.function.parameters
-          }
-        } as FunctionTool;
-      }
-      return tool as Tool;
-    });
+    if (request.tools) {
+      console.log(JSON.stringify(request.tools));
+    }
+
+    const mappedTools = this.mapTools(request.tools);
 
     // Always use messages interface since we're working with chat completions
     const options: AiMessagesInputOptions = {
@@ -364,7 +353,7 @@ export default {
         role: msg.role,
         content: msg.content
       })),
-      tools: tools ?? undefined,
+      tools: mappedTools,
       // Map deprecated function_call to tool_choice
       ...(request.tool_choice ? { tool_choice: request.tool_choice } :
         request.function_call ? { tool_choice: request.function_call } : {})
@@ -771,7 +760,11 @@ export default {
   /**
    * Helper functions
    */
-  mapTools(tools: Assistant['tools']): Array<Tool | FunctionTool> {
+  mapTools(tools: Assistant['tools'] | undefined): Array<Tool | FunctionTool> | undefined {
+    if (!tools) return tools;
+
+    console.log("tools", tools);
+
     return tools.map(tool => {
       switch (tool.type) {
         case 'code_interpreter':
