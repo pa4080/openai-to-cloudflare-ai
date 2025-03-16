@@ -1,4 +1,4 @@
-# Translate API: OpenAI to Cloudflare AI
+# Translation API: OpenAI to Cloudflare AI
 
 Cloudflare Worker that provides a Base URL for making AI requests to [Cloudflare Workers AI](https://developers.cloudflare.com/workers-ai/) using an OpenAI client or call format.  
 
