@@ -1,6 +1,18 @@
-# OpenAI to Llama 3 AI
+# Translate API: OpenAI to Cloudflare AI
 
-This is example of using [Workers AI](https://developers.cloudflare.com/workers-ai/). This Cloudflare Worker provides a Base URL which allows you to make AI calls to the @cf/meta/llama-3-8b-instruct model using an OpenAI client.
+Cloudflare Worker that provides a Base URL for making AI requests to [Cloudflare Workers AI](https://developers.cloudflare.com/workers-ai/) using an OpenAI client or call format.  
+
+Features:
+ - Supports AI calls via OpenAI-compatible clients  
+ - Token-protected API for secure access  
+ - Utilizes KV and AI from the Clodflare Worker's Enviroonment
+ - Hives access to all Clodflare's AI models, but doen't translate all possible calls
+ - Example usage available in the [`scripts/`](scripts/) folder
+
+Purpose:
+- The primary goal of this worker is to facilitate basic operations within the [n8n](https://n8n.io/) workflow automation tool.
+- Now it can be used for simple LLM chains and embeddings.
+
 
 ## Deployment and test
 
